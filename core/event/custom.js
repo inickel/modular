@@ -1,5 +1,5 @@
 var Base = require('./base');
-var Tools = require('../../tools');
+var Tools = require('../tools');
 
 function _Object(data) {
 	_Object.superclass.constructor.call(this);
@@ -273,7 +273,6 @@ var Target = {
 	getTargets: function() {
 		return this[BUBBLE_TARGETS] || (this[BUBBLE_TARGETS] = []);
 	},
-
 	getEventListeners: function(type) {
 		var observables = this[CUSTOM_EVENTS] || (this[CUSTOM_EVENTS] = {});
 		return type ? observables[type] : observables;

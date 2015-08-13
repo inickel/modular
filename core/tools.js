@@ -1,30 +1,55 @@
 var enumProperties = 'constructor,hasOwnProperty,isPrototypeOf,propertyIsEnumerable,toString,toLocaleString,valueOf'.split(',');
-var Obj = Object;
-var objectCreate = Obj.create;
-var toString = {}.toString;
-var COMPARE_MARKER = '__~compared';
-var MIX_CIRCULAR_DETECTION = '__MIX_CIRCULAR';
-var STAMP_MARKER = '__~stamped';
-var CLONE_MARKER = '__~cloned';
+var objectCreate = Object.create;
+var toString = Object.prototype.toString;
 var host = typeof window === 'undefined' ? global : window;
+var trim = String.prototype.trim;
+var class2type = {};
+var MIX_CIRCULAR_DETECTION = '__MIX_CIRCULAR';
 
+var MARKER_COMPARED = '__~compared';
+var MARKER_STAMPED = '__~stamped';
+var MARKER_CLONED = '__~cloned';
+var EMPTY = '';
+var REG_SUBSTITUTE = /\\?\{([^{}]+)\}/g;
+var REG_TRIM = /^[\s\xa0]+|[\s\xa0]+$/g;
+var REG_DASH = /-([a-z])/gi;
+var AP = Array.prototype,
+	indexOf = AP.indexOf,
+	lastIndexOf = AP.lastIndexOf,
+	filter = AP.filter,
+	every = AP.every,
+	some = AP.some,
+	map = AP.map;
+
+function bindFn(r, fn, obj) {
+	function FNOP() {}
+	var slice = [].slice,
+		args = slice.call(arguments, 3),
+		bound = function() {
+			var inArgs = slice.call(arguments);
+			return fn.apply(this instanceof FNOP ? this : obj || this, r ? inArgs.concat(args) : args.concat(inArgs));
+		};
+	FNOP.prototype = fn.prototype;
+	bound.prototype = new FNOP();
+	return bound;
+}
 
 function hasKey(obj, keyName) {
 	return obj !== null && obj !== undefined && obj[keyName] !== undefined;
 }
 
 function cleanAndReturn(a, b, ret) {
-	delete a[COMPARE_MARKER];
-	delete b[COMPARE_MARKER];
+	delete a[MARKER_COMPARED];
+	delete b[MARKER_COMPARED];
 	return ret;
 }
 
 function compareObjects(a, b) {
-	if (a[COMPARE_MARKER] === b && b[COMPARE_MARKER] === a) {
+	if (a[MARKER_COMPARED] === b && b[MARKER_COMPARED] === a) {
 		return true;
 	}
-	a[COMPARE_MARKER] = b;
-	b[COMPARE_MARKER] = a;
+	a[MARKER_COMPARED] = b;
+	b[MARKER_COMPARED] = a;
 	for (var property in b) {
 		if (!hasKey(a, property) && hasKey(b, property)) {
 			return cleanAndReturn(a, b, false);
@@ -36,7 +61,7 @@ function compareObjects(a, b) {
 		}
 	}
 	for (property in b) {
-		if (property === COMPARE_MARKER) {
+		if (property === MARKER_COMPARED) {
 			continue;
 		}
 		if (!tools.equals(a[property], b[property])) {
@@ -47,9 +72,69 @@ function compareObjects(a, b) {
 		return cleanAndReturn(a, b, false);
 	}
 	return cleanAndReturn(a, b, true);
-};
+}
 
+function hasOwnProperty(o, p) {
+	return Object.prototype.hasOwnProperty.call(o, p);
+}
 var tools = {
+	type: function(o) {
+		return o == null ? String(o) : class2type[toString.call(o)] || 'object';
+	},
+	isPlainObject: function(obj) {
+		if (!obj || tools.type(obj) !== 'object' || obj.nodeType || obj.window == obj) {
+			return false;
+		}
+		var key, objConstructor;
+		try {
+			if ((objConstructor = obj.constructor) && !hasOwnProperty(obj, 'constructor') && !hasOwnProperty(objConstructor.prototype, 'isPrototypeOf')) {
+				return false;
+			}
+		} catch (e) {
+			return false;
+		}
+		for (key in obj) {}
+		return key === undefined || hasOwnProperty(obj, key);
+	},
+	startsWith: function(str, prefix) {
+		return str.lastIndexOf(prefix, 0) === 0;
+	},
+	endsWith: function(str, suffix) {
+		var ind = str.length - suffix.length;
+		return ind >= 0 && str.indexOf(suffix, ind) === ind;
+	},
+	trim: trim ? function(str) {
+		return str == null ? EMPTY : trim.call(str);
+	} : function(str) {
+		return str == null ? EMPTY : (str + '').replace(REG_TRIM, EMPTY);
+	},
+	urlEncode: function(s) {
+		return encodeURIComponent(String(s));
+	},
+	urlDecode: function(s) {
+		return decodeURIComponent(s.replace(/\+/g, ' '));
+	},
+	camelCase: function(name) {
+		if (name.indexOf('-') === -1) {
+			return name;
+		}
+		return name.replace(REG_DASH, upperCase);
+	},
+	substitute: function(str, o, regexp) {
+		if (typeof str !== 'string' || !o) {
+			return str;
+		}
+		return str.replace(regexp || REG_SUBSTITUTE, function(match, name) {
+			if (match.charAt(0) === '\\') {
+				return match.slice(1);
+			}
+			return o[name] === undefined ? EMPTY : o[name];
+		});
+	},
+	ucfirst: function(s) {
+		s += '';
+		return s.charAt(0).toUpperCase() + s.substring(1);
+	},
 	equals: function(a, b) {
 		if (a === b) {
 			return true;
@@ -113,7 +198,7 @@ var tools = {
 		}
 		return object;
 	},
-	now: Date.now || function() {
+	now: function() {
 		return +new Date();
 	},
 	isEmptyObject: function(o) {
@@ -125,7 +210,7 @@ var tools = {
 		return true;
 	},
 	stamp: function(o, readOnly, marker) {
-		marker = marker || STAMP_MARKER;
+		marker = marker || MARKER_STAMPED;
 		var guid = o[marker];
 		if (guid) {
 			return guid;
@@ -242,16 +327,233 @@ var tools = {
 		if (structured) {
 			tools.each(memory, function(v) {
 				v = v.input;
-				if (v[CLONE_MARKER]) {
+				if (v[MARKER_CLONED]) {
 					try {
-						delete v[CLONE_MARKER];
+						delete v[MARKER_CLONED];
 					} catch (e) {
-						v[CLONE_MARKER] = undefined;
+						v[MARKER_CLONED] = undefined;
 					}
 				}
 			});
 		}
 		memory = null;
 		return ret;
+	},
+	noop: function() {},
+	bind: bindFn(0, bindFn, null, 0),
+	rbind: bindFn(0, bindFn, null, 1),
+	later: function(fn, when, periodic, context, data) {
+		when = when || 0;
+		var m = fn,
+			d = tools.makeArray(data),
+			f, r;
+		if (typeof fn === 'string') {
+			m = context[fn];
+		}
+		f = function() {
+			m.apply(context, d);
+		};
+		r = periodic ? setInterval(f, when) : setTimeout(f, when);
+		return {
+			id: r,
+			interval: periodic,
+			cancel: function() {
+				if (this.interval) {
+					clearInterval(r);
+				} else {
+					clearTimeout(r);
+				}
+			}
+		};
+	},
+	throttle: function(fn, ms, context) {
+		ms = ms || 150;
+		if (ms === -1) {
+			return function() {
+				fn.apply(context || this, arguments);
+			};
+		}
+		var last = tools.now();
+		return function() {
+			var now = tools.now();
+			if (now - last > ms) {
+				last = now;
+				fn.apply(context || this, arguments);
+			}
+		};
+	},
+	buffer: function(fn, ms, context) {
+		ms = ms || 150;
+		if (ms === -1) {
+			return function() {
+				fn.apply(context || this, arguments);
+			};
+		}
+		var bufferTimer = null;
+
+		function f() {
+			f.stop();
+			bufferTimer = tools.later(fn, ms, 0, context || this, arguments);
+		}
+		f.stop = function() {
+			if (bufferTimer) {
+				bufferTimer.cancel();
+				bufferTimer = 0;
+			}
+		};
+		return f;
+	},
+	indexOf: indexOf ? function(item, arr, fromIndex) {
+		return fromIndex === undefined ? indexOf.call(arr, item) : indexOf.call(arr, item, fromIndex);
+	} : function(item, arr, fromIndex) {
+		for (var i = fromIndex || 0, len = arr.length; i < len; ++i) {
+			if (arr[i] === item) {
+				return i;
+			}
+		}
+		return -1;
+	},
+	lastIndexOf: lastIndexOf ? function(item, arr, fromIndex) {
+		return fromIndex === undefined ? lastIndexOf.call(arr, item) : lastIndexOf.call(arr, item, fromIndex);
+	} : function(item, arr, fromIndex) {
+		if (fromIndex === undefined) {
+			fromIndex = arr.length - 1;
+		}
+		for (var i = fromIndex; i >= 0; i--) {
+			if (arr[i] === item) {
+				break;
+			}
+		}
+		return i;
+	},
+	unique: function(a, override) {
+		var b = a.slice();
+		if (override) {
+			b.reverse();
+		}
+		var i = 0,
+			n, item;
+		while (i < b.length) {
+			item = b[i];
+			while ((n = tools.lastIndexOf(item, b)) !== i) {
+				b.splice(n, 1);
+			}
+			i += 1;
+		}
+		if (override) {
+			b.reverse();
+		}
+		return b;
+	},
+	inArray: function(item, arr) {
+		return tools.indexOf(item, arr) > -1;
+	},
+	filter: filter ? function(arr, fn, context) {
+		return filter.call(arr, fn, context || this);
+	} : function(arr, fn, context) {
+		var ret = [];
+		tools.each(arr, function(item, i, arr) {
+			if (fn.call(context || this, item, i, arr)) {
+				ret.push(item);
+			}
+		});
+		return ret;
+	},
+	map: map ? function(arr, fn, context) {
+		return map.call(arr, fn, context || this);
+	} : function(arr, fn, context) {
+		var len = arr.length,
+			res = new Array(len);
+		for (var i = 0; i < len; i++) {
+			var el = typeof arr === 'string' ? arr.charAt(i) : arr[i];
+			if (el || i in arr) {
+				res[i] = fn.call(context || this, el, i, arr);
+			}
+		}
+		return res;
+	},
+	reduce: function(arr, callback, initialValue) {
+		var len = arr.length;
+		if (typeof callback !== 'function') {
+			throw new TypeError('callback is not function!');
+		}
+		if (len === 0 && arguments.length === 2) {
+			throw new TypeError('arguments invalid');
+		}
+		var k = 0;
+		var accumulator;
+		if (arguments.length >= 3) {
+			accumulator = initialValue;
+		} else {
+			do {
+				if (k in arr) {
+					accumulator = arr[k++];
+					break;
+				}
+				k += 1;
+				if (k >= len) {
+					throw new TypeError();
+				}
+			} while (TRUE);
+		}
+		while (k < len) {
+			if (k in arr) {
+				accumulator = callback.call(undefined, accumulator, arr[k], k, arr);
+			}
+			k++;
+		}
+		return accumulator;
+	},
+	every: every ? function(arr, fn, context) {
+		return every.call(arr, fn, context || this);
+	} : function(arr, fn, context) {
+		var len = arr && arr.length || 0;
+		for (var i = 0; i < len; i++) {
+			if (i in arr && !fn.call(context, arr[i], i, arr)) {
+				return false;
+			}
+		}
+		return TRUE;
+	},
+	some: some ? function(arr, fn, context) {
+		return some.call(arr, fn, context || this);
+	} : function(arr, fn, context) {
+		var len = arr && arr.length || 0;
+		for (var i = 0; i < len; i++) {
+			if (i in arr && fn.call(context, arr[i], i, arr)) {
+				return TRUE;
+			}
+		}
+		return false;
+	},
+	makeArray: function(o) {
+		if (o == null) {
+			return [];
+		}
+		if (tools.isArray(o)) {
+			return o;
+		}
+		var lengthType = typeof o.length,
+			oType = typeof o;
+		if (lengthType !== 'number' || typeof o.nodeName === 'string' || o != null && o == o.window || oType === 'string' || oType === 'function' && !('item' in o && lengthType === 'number')) {
+			return [o];
+		}
+		var ret = [];
+		for (var i = 0, l = o.length; i < l; i++) {
+			ret[i] = o[i];
+		}
+		return ret;
 	}
+
 };
+
+var types = 'Boolean Number String Function Date RegExp Object Array'.split(' ');
+for (var i = 0; i < types.length; i++) {
+	(function(name, lc) {
+		class2type['[object ' + name + ']'] = lc = name.toLowerCase();
+		tools['is' + name] = function(o) {
+			return tools.type(o) === lc;
+		};
+	}(types[i], i));
+}
+tools.isArray = Array.isArray || tools.isArray;
