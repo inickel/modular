@@ -1,4 +1,6 @@
 var enumProperties = 'constructor,hasOwnProperty,isPrototypeOf,propertyIsEnumerable,toString,toLocaleString,valueOf'.split(',');
+var types = 'Boolean,Number,String,Function,Date,RegExp,Object,Array'.split(',');
+
 var objectCreate = Object.create;
 var toString = Object.prototype.toString;
 var host = typeof window === 'undefined' ? global : window;
@@ -13,6 +15,7 @@ var EMPTY = '';
 var REG_SUBSTITUTE = /\\?\{([^{}]+)\}/g;
 var REG_TRIM = /^[\s\xa0]+|[\s\xa0]+$/g;
 var REG_DASH = /-([a-z])/gi;
+
 var AP = Array.prototype,
 	indexOf = AP.indexOf,
 	lastIndexOf = AP.lastIndexOf,
@@ -64,11 +67,11 @@ function compareObjects(a, b) {
 		if (property === MARKER_COMPARED) {
 			continue;
 		}
-		if (!tools.equals(a[property], b[property])) {
+		if (!Tools.equals(a[property], b[property])) {
 			return cleanAndReturn(a, b, false);
 		}
 	}
-	if (tools.isArray(a) && tools.isArray(b) && a.length !== b.length) {
+	if (Tools.isArray(a) && Tools.isArray(b) && a.length !== b.length) {
 		return cleanAndReturn(a, b, false);
 	}
 	return cleanAndReturn(a, b, true);
@@ -77,12 +80,13 @@ function compareObjects(a, b) {
 function hasOwnProperty(o, p) {
 	return Object.prototype.hasOwnProperty.call(o, p);
 }
-var tools = {
+
+var Tools = {
 	type: function(o) {
 		return o == null ? String(o) : class2type[toString.call(o)] || 'object';
 	},
 	isPlainObject: function(obj) {
-		if (!obj || tools.type(obj) !== 'object' || obj.nodeType || obj.window == obj) {
+		if (!obj || Tools.type(obj) !== 'object' || obj.nodeType || obj.window == obj) {
 			return false;
 		}
 		var key, objConstructor;
@@ -181,7 +185,7 @@ var tools = {
 				isObj = length === undefined || toString.call(object) === '[object Function]';
 			context = context || null;
 			if (isObj) {
-				keys = tools.keys(object);
+				keys = Tools.keys(object);
 				for (; i < keys.length; i++) {
 					key = keys[i];
 					if (fn.call(context, object[key], key, object) === false) {
@@ -216,7 +220,7 @@ var tools = {
 			return guid;
 		} else if (!readOnly) {
 			try {
-				guid = o[marker] = tools.guid(marker);
+				guid = o[marker] = Tools.guid(marker);
 			} catch (e) {
 				guid = undefined;
 			}
@@ -234,7 +238,7 @@ var tools = {
 		if (wl && typeof wl !== 'function') {
 			var originalWl = wl;
 			wl = function(name, val) {
-				return tools.inArray(name, originalWl) ? val : undefined;
+				return Tools.inArray(name, originalWl) ? val : undefined;
 			};
 		}
 		if (ov === undefined) {
@@ -253,22 +257,22 @@ var tools = {
 		return r;
 	},
 	merge: function(varArgs) {
-		varArgs = tools.makeArray(arguments);
+		varArgs = Tools.makeArray(arguments);
 		var o = {},
 			i, l = varArgs.length;
 		for (i = 0; i < l; i++) {
-			tools.mix(o, varArgs[i]);
+			Tools.mix(o, varArgs[i]);
 		}
 		return o;
 	},
 	augment: function(r, varArgs) {
-		var args = tools.makeArray(arguments),
+		var args = Tools.makeArray(arguments),
 			len = args.length - 2,
 			i = 1,
 			proto, arg, ov = args[len],
 			wl = args[len + 1];
 		args[1] = varArgs;
-		if (!tools.isArray(wl)) {
+		if (!Tools.isArray(wl)) {
 			ov = wl;
 			wl = undefined;
 			len++;
@@ -280,9 +284,9 @@ var tools = {
 		for (; i < len; i++) {
 			arg = args[i];
 			if (proto = arg.prototype) {
-				arg = tools.mix({}, proto, true, removeConstructor);
+				arg = Tools.mix({}, proto, true, removeConstructor);
 			}
-			tools.mix(r.prototype, arg, ov, wl);
+			Tools.mix(r.prototype, arg, ov, wl);
 		}
 		return r;
 	},
@@ -291,13 +295,13 @@ var tools = {
 			rp;
 		sp.constructor = s;
 		rp = createObject(sp, r);
-		r.prototype = tools.mix(rp, r.prototype);
+		r.prototype = Tools.mix(rp, r.prototype);
 		r.superclass = sp;
 		if (px) {
-			tools.mix(rp, px);
+			Tools.mix(rp, px);
 		}
 		if (sx) {
-			tools.mix(r, sx);
+			Tools.mix(r, sx);
 		}
 		return r;
 	},
@@ -325,7 +329,7 @@ var tools = {
 		}
 		var ret = cloneInternal(input, filter, memory, structured);
 		if (structured) {
-			tools.each(memory, function(v) {
+			Tools.each(memory, function(v) {
 				v = v.input;
 				if (v[MARKER_CLONED]) {
 					try {
@@ -345,7 +349,7 @@ var tools = {
 	later: function(fn, when, periodic, context, data) {
 		when = when || 0;
 		var m = fn,
-			d = tools.makeArray(data),
+			d = Tools.makeArray(data),
 			f, r;
 		if (typeof fn === 'string') {
 			m = context[fn];
@@ -373,9 +377,9 @@ var tools = {
 				fn.apply(context || this, arguments);
 			};
 		}
-		var last = tools.now();
+		var last = Tools.now();
 		return function() {
-			var now = tools.now();
+			var now = Tools.now();
 			if (now - last > ms) {
 				last = now;
 				fn.apply(context || this, arguments);
@@ -393,7 +397,7 @@ var tools = {
 
 		function f() {
 			f.stop();
-			bufferTimer = tools.later(fn, ms, 0, context || this, arguments);
+			bufferTimer = Tools.later(fn, ms, 0, context || this, arguments);
 		}
 		f.stop = function() {
 			if (bufferTimer) {
@@ -403,6 +407,7 @@ var tools = {
 		};
 		return f;
 	},
+	isArray:function(){},
 	indexOf: indexOf ? function(item, arr, fromIndex) {
 		return fromIndex === undefined ? indexOf.call(arr, item) : indexOf.call(arr, item, fromIndex);
 	} : function(item, arr, fromIndex) {
@@ -435,7 +440,7 @@ var tools = {
 			n, item;
 		while (i < b.length) {
 			item = b[i];
-			while ((n = tools.lastIndexOf(item, b)) !== i) {
+			while ((n = Tools.lastIndexOf(item, b)) !== i) {
 				b.splice(n, 1);
 			}
 			i += 1;
@@ -446,13 +451,13 @@ var tools = {
 		return b;
 	},
 	inArray: function(item, arr) {
-		return tools.indexOf(item, arr) > -1;
+		return Tools.indexOf(item, arr) > -1;
 	},
 	filter: filter ? function(arr, fn, context) {
 		return filter.call(arr, fn, context || this);
 	} : function(arr, fn, context) {
 		var ret = [];
-		tools.each(arr, function(item, i, arr) {
+		Tools.each(arr, function(item, i, arr) {
 			if (fn.call(context || this, item, i, arr)) {
 				ret.push(item);
 			}
@@ -530,7 +535,7 @@ var tools = {
 		if (o == null) {
 			return [];
 		}
-		if (tools.isArray(o)) {
+		if (Tools.isArray(o)) {
 			return o;
 		}
 		var lengthType = typeof o.length,
@@ -547,13 +552,15 @@ var tools = {
 
 };
 
-var types = 'Boolean Number String Function Date RegExp Object Array'.split(' ');
 for (var i = 0; i < types.length; i++) {
 	(function(name, lc) {
 		class2type['[object ' + name + ']'] = lc = name.toLowerCase();
-		tools['is' + name] = function(o) {
-			return tools.type(o) === lc;
+		Tools['is' + name] = function(o) {
+			return Tools.type(o) === lc;
 		};
 	}(types[i], i));
 }
-tools.isArray = Array.isArray || tools.isArray;
+
+Tools.isArray = Array.isArray || Tools.isArray;
+
+module.exports = Tools;

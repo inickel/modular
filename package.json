@@ -1,0 +1,25 @@
+{
+  "name": "modular",
+  "version": "1.0.0",
+  "description": "modular modules",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/inickel/modular.git"
+  },
+  "keywords": [
+    "modular"
+  ],
+  "author": "inickel",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/inickel/modular/issues"
+  },
+  "homepage": "https://github.com/inickel/modular"
+}
