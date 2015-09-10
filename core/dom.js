@@ -6,13 +6,13 @@
   var REG_CAPITAL = /([A-Z])/g;
   var REG_SIMPLE_SELECTOR = /^[\w-]*$/;
   var REG_READY = /complete|loaded|interactive/;
+
   var REG_ClassSelector = /^\.([\w-]+)$/;
   var REG_IdSelector = /^#([\w-]+)$/;
   var REG_TagSelector = /^([\w-])+$/;
   var REG_TagIdSelector = /^([\w-]+)#([\w-]+)$/;
   var REG_SimpleSelector = /^(?:#([\w-]+))?\s*([\w-]+|\*)?\.?([\w-]+)?$/;
-
-
+  var AP = Array.prototype;
   var classCache = {};
   var class2type = {};
   var types = 'Boolean,Number,String,Function,Array,Date,RegExp,Object,Error'.split(',');
@@ -36,7 +36,7 @@
       }
     },
     extend: function(target) {
-      var deep, args = Array.prototype.slice.call(arguments, 1);
+      var deep, args = AP.slice.call(arguments, 1);
       if (typeof target == 'boolean') {
         deep = target;
         target = args.shift();
@@ -50,12 +50,75 @@
     type: function(target) {
       return target == null ? String(target) : class2type[Object.prototype.toString.call(target)] || "object";
     },
+    concat: function() {
+      var i, value, args = [];
+      for (i = 0; i < arguments.length; i++) {
+        value = arguments[i];
+        args[i] = Api.isNode(value) ? value.toArray() : value;
+      }
+      return AP.concat.apply(Api.isNode(this) ? this.toArray() : this, args);
+    },
     unique: function(target) {
-      return Array.prototype.filter.call(target, function(item, idx) {
+      return AP.filter.call(target, function(item, idx) {
         return target.indexOf(item) == idx;
       });
     },
-
+    map: function(elements, callback) {
+      var value, i, key, values = [];
+      if (Util.likeArray(elements))
+        for (i = 0; i < elements.length; i++) {
+          value = callback(elements[i], i);
+          if (value != null) {
+            values.push(value);
+          }
+        } else {
+          for (key in elements) {
+            value = callback(elements[key], key);
+            if (value != null) {
+              values.push(value);
+            }
+          }
+        }
+      return Util.flatten(values);
+    },
+    each: function(elements, callback) {
+      var i, key;
+      if (Util.likeArray(elements)) {
+        for (i = 0; i < elements.length; i++) {
+          if (callback.call(elements[i], i, elements[i]) === false) {
+            return elements;
+          }
+        }
+      } else {
+        for (key in elements) {
+          if (callback.call(elements[key], key, elements[key]) === false) {
+            return elements;
+          }
+        }
+      }
+      return elements;
+    },
+    grep: function(elements, callback) {
+      return AP.filter.call(elements, callback);
+    },
+    compact: function(target) {
+      return AP.filter.call(target, function(item) {
+        return item != null;
+      });
+    },
+    flatten: function(target) {
+      return target.length > 0 ? Util.concat.apply([], target) : target;
+    },
+    contains: document.documentElement.contains ? function(parent, node) {
+      return parent !== node && parent.contains(node);
+    } : function(parent, node) {
+      while (node && (node = node.parentNode)) {
+        if (node === parent) {
+          return true;
+        }
+      }
+      return false;
+    },
     isPlainObject: function(target) {
       return Util.isObject(target) && !Util.isWindow(target) && Object.getPrototypeOf(target) == Object.prototype;
     },
@@ -67,19 +130,10 @@
       return true;
     },
     inArray: function(elem, target, i) {
-      return Array.prototype.indexOf.call(target, elem, i);
+      return AP.indexOf.call(target, elem, i);
     },
     likeArray: function(target) {
       return typeof target.length == 'number';
-    },
-
-    compact: function(target) {
-      return Array.prototype.filter.call(target, function(item) {
-        return item != null;
-      });
-    },
-    flatten: function(target) {
-      return target.length > 0 ? $.fn.concat.apply([], target) : target;
     },
     camelize: function(input) {
       return input.replace(/-+(.)?/g, function(match, chr) {
@@ -107,7 +161,7 @@
     }(types[i], i));
   }
 
-  function Node(dom, selector) {
+  var Node = function(dom, selector) {
     var i, length = dom ? dom.length : 0;
     for (i = 0; i < length; i++) {
       this[i] = dom[i];
@@ -115,7 +169,7 @@
 
     this.length = length;
     this.selector = selector || '';
-    this.isNode = true;
+    this.isNode = !!selector && !!dom;
   }
 
   var Api = {
@@ -129,8 +183,7 @@
           dom = Api.fragment(selector, RegExp.$1, context);
           selector = null;
         }
-        // If there's a context, create a collection on that context first, and select
-        // nodes from there
+        // If there's a context, create a collection on that context first, and select nodes from there
         else if (context !== undefined) {
           return $(context).find(selector);
         }
@@ -212,7 +265,7 @@
 
         container = containers[name];
         container.innerHTML = '' + html;
-        dom = $.each(Array.prototype.slice.call(container.childNodes), function() {
+        dom = $.each(AP.slice.call(container.childNodes), function() {
           container.removeChild(this);
         });
       }
@@ -240,7 +293,7 @@
       return (element.getElementById && isSimple && IDSelector) ? // Safari DocumentFragment doesn't have getElementById
         ((found = element.getElementById(nameOnly)) ? [found] : []) :
         (element.nodeType !== 1 && element.nodeType !== 9 && element.nodeType !== 11) ? [] :
-        Array.prototype.slice.call(
+        AP.slice.call(
           isSimple && !IDSelector && element.getElementsByClassName ? // DocumentFragment doesn't have getElementsByClassName/TagName
           ClassSelector ? element.getElementsByClassName(nameOnly) : // If it's simple, it could be a class
           element.getElementsByTagName(selector) : // Or a tag
@@ -249,61 +302,8 @@
     }
   };
 
-  $ = function(selector, context) {
+  var $ = function(selector, context) {
     return Api.init(selector, context);
-  }
-
-  $.contains = document.documentElement.contains ? function(parent, node) {
-      return parent !== node && parent.contains(node);
-    } :
-    function(parent, node) {
-      while (node && (node = node.parentNode)) {
-        if (node === parent) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-  $.map = function(elements, callback) {
-    var value, i, key, values = [];
-    if (Util.likeArray(elements))
-      for (i = 0; i < elements.length; i++) {
-        value = callback(elements[i], i);
-        if (value != null) {
-          values.push(value);
-        }
-      } else {
-        for (key in elements) {
-          value = callback(elements[key], key);
-          if (value != null) {
-            values.push(value);
-          }
-        }
-      }
-    return Util.flatten(values);
-  }
-
-  $.each = function(elements, callback) {
-    var i, key;
-    if (Util.likeArray(elements)) {
-      for (i = 0; i < elements.length; i++) {
-        if (callback.call(elements[i], i, elements[i]) === false) {
-          return elements;
-        }
-      }
-    } else {
-      for (key in elements) {
-        if (callback.call(elements[key], key, elements[key]) === false) {
-          return elements;
-        }
-      }
-    }
-    return elements;
-  }
-
-  $.grep = function(elements, callback) {
-    return Array.prototype.filter.call(elements, callback);
   }
 
   $.fn = {
@@ -319,14 +319,14 @@
       }
       return this;
     },
-    map: function(fn) {
+    map: function(callback) {
       return $($.map(this, function(el, i) {
-        return fn.call(el, i, el);
-      }))
+        return callback.call(el, i, el);
+      }));
     },
     contents: function() {
       return this.map(function() {
-        return this.contentDocument || Array.prototype.slice.call(this.childNodes);
+        return this.contentDocument || AP.slice.call(this.childNodes);
       });
     },
     filter: function(selector) {
@@ -334,7 +334,7 @@
         return this.not(this.not(selector));
       }
 
-      return $(Array.prototype.filter.call(this, function(element) {
+      return $(AP.filter.call(this, function(element) {
         return Api.matches(element, selector);
       }));
     },
@@ -343,11 +343,11 @@
     },
     not: function(selector) {
       var nodes = []
-      if (Util.isFunction(selector) && selector.call !== undefined)
+      if (Util.isFunction(selector) && selector.call !== undefined) {
         this.each(function(idx) {
           if (!selector.call(this, idx)) nodes.push(this);
         });
-      else {
+      } else {
         var excludes = typeof selector == 'string' ? this.filter(selector) : (Util.likeArray(selector) && Util.isFunction(selector.item)) ? slice.call(selector) : $(selector)
         this.forEach(function(el) {
           if (excludes.indexOf(el) < 0) {
@@ -380,7 +380,7 @@
       } else if (typeof selector == 'object') {
         result = $(selector).filter(function() {
           var node = this;
-          return Array.prototype.some.call($this, function(parent) {
+          return AP.some.call($this, function(parent) {
             return $.contains(parent, node);
           });
         });
@@ -393,34 +393,24 @@
       }
       return result;
     },
-    concat: function() {
-      var i, value, args = [];
-      for (i = 0; i < arguments.length; i++) {
-        value = arguments[i];
-        args[i] = Api.isNode(value) ? value.toArray() : value;
-      }
-      return Array.prototype.concat.apply(Api.isNode(this) ? this.toArray() : this, args);
-    },
     get: function(idx) {
-      return idx === undefined ? Array.prototype.slice.call(this) : this[idx >= 0 ? idx : idx + this.length];
+      return idx === undefined ? AP.slice.call(this) : this[idx >= 0 ? idx : idx + this.length];
     },
     toArray: function() {
       return this.get();
     },
     each: function(callback) {
-      Array.prototype.every.call(this, function(el, idx) {
+      AP.every.call(this, function(el, idx) {
         return callback.call(el, idx, el) !== false;
       });
       return this;
     },
     remove: function() {
-      var self = this;
-      self.each(function() {
+      return this.each(function() {
         if (this.parentNode != null) {
           this.parentNode.removeChild(this);
         }
       });
-      return self;
     },
   }
 
